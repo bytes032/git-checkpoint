@@ -166,6 +166,22 @@ function formatAge(ms) {
   return `${years}y ago`;
 }
 
+function formatStamp(value) {
+  const ts = Date.parse(value || "");
+  if (!Number.isFinite(ts)) return value || "";
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(ts));
+  } catch {
+    return new Date(ts).toLocaleString();
+  }
+}
+
 function currentCheckpointName(baseDir) {
   const currentLink = join(baseDir, "current");
   if (existsSync(currentLink)) {
@@ -190,7 +206,7 @@ function listWithActivity(baseDir, output = process.stdout) {
   const currentName = currentCheckpointName(baseDir);
   for (const item of indexed.sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }))) {
     const age = formatAge(now - item.mtimeMs);
-    const stamp = item.lastModified || new Date(item.mtimeMs).toISOString();
+    const stamp = formatStamp(item.lastModified || new Date(item.mtimeMs).toISOString());
     const mark = item.name === currentName ? "*" : " ";
     output.write(`${mark} ${item.name}  ${age}  (${stamp})\n`);
   }
@@ -221,7 +237,7 @@ async function pickCheckpointInteractive(baseDir) {
     .sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }))
     .map((item) => {
       const age = formatAge(now - item.mtimeMs);
-      const stamp = item.lastModified || new Date(item.mtimeMs).toISOString();
+      const stamp = formatStamp(item.lastModified || new Date(item.mtimeMs).toISOString());
       const mark = item.name === currentName ? "*" : " ";
       return {
         name: `${mark} ${item.name}  ${age}  (${stamp})`,
@@ -229,17 +245,20 @@ async function pickCheckpointInteractive(baseDir) {
       };
     });
 
-  const { checkpoint } = await inquirer.prompt([
-    {
-      type: "list",
-      name: "checkpoint",
-      message: "Select checkpoint",
-      pageSize: 12,
-      choices,
-    },
-  ]);
-
-  return checkpoint || "";
+  try {
+    const { checkpoint } = await inquirer.prompt([
+      {
+        type: "list",
+        name: "checkpoint",
+        message: "Select checkpoint",
+        pageSize: 12,
+        choices,
+      },
+    ]);
+    return checkpoint || "";
+  } catch {
+    return "";
+  }
 }
 
 function resolveName(baseDir, repo, nameOrNumber) {
@@ -488,8 +507,7 @@ if (cmd === "switch") {
   if (!nameOrNumber) {
     const picked = await pickCheckpointInteractive(baseDir);
     if (!picked) {
-      process.stderr.write("no selection\n");
-      process.exit(1);
+      process.exit(130);
     }
     const target = join(baseDir, picked);
     if (!isDir(target)) die(`checkpoint is not a directory: ${picked}`);
