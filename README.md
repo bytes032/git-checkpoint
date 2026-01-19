@@ -34,6 +34,8 @@ source ~/git-checkpoint/shell/gc.sh
 Add that line to `~/.zshrc` or `~/.bashrc` to make it permanent.
 If you use oh-my-zsh, it may define a `gc` git alias; the helper will
 `unalias gc` so the CLI can take over.
+The helper also runs `git pull --ff-only` after switching, when a remote
+named `origin` exists.
 
 ## Quickstart
 
@@ -93,9 +95,12 @@ Lists available checkpoints for a repo.
 
 ```
 gc switch <repo> <name-or-number>
+gc switch <repo>
 ```
 
 Updates the `current` symlink to point at the selected checkpoint.
+If you run `gc switch <repo>` with no name, it lists checkpoints with
+last activity.
 
 Example:
 

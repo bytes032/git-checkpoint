@@ -140,6 +140,47 @@ function recordCheckpoint(baseDir, name) {
   saveIndex(baseDir, index.items);
 }
 
+function formatAge(ms) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 24) return `${months}mo ago`;
+  const years = Math.floor(months / 12);
+  return `${years}y ago`;
+}
+
+function listWithActivity(baseDir) {
+  const names = listCheckpoints(baseDir);
+  if (names.length === 0) {
+    process.stderr.write("no checkpoints found\n");
+    return;
+  }
+  const nameSet = new Set(names);
+  const indexed = ensureIndex(baseDir, names).filter((item) => nameSet.has(item.name));
+  const now = Date.now();
+  const currentLink = join(baseDir, "current");
+  let currentName = "";
+  if (existsSync(currentLink)) {
+    try {
+      currentName = basename(readlinkSync(currentLink));
+    } catch {
+      currentName = "";
+    }
+  }
+  for (const item of indexed.sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }))) {
+    const age = formatAge(now - item.mtimeMs);
+    const stamp = item.lastModified || new Date(item.mtimeMs).toISOString();
+    const mark = item.name === currentName ? "*" : " ";
+    console.log(`${mark} ${item.name}  ${age}  (${stamp})`);
+  }
+}
+
 function resolveName(baseDir, repo, nameOrNumber) {
   if (!nameOrNumber) die("missing checkpoint name or number");
   if (/^\d+$/.test(nameOrNumber)) {
@@ -383,6 +424,10 @@ if (cmd === "path") {
 
 if (cmd === "switch") {
   const nameOrNumber = args[2];
+  if (!nameOrNumber) {
+    listWithActivity(baseDir);
+    process.exit(0);
+  }
   const resolvedName = resolveName(baseDir, repo, nameOrNumber);
   const target = join(baseDir, resolvedName);
   if (!isDir(target)) die(`checkpoint is not a directory: ${resolvedName}`);
