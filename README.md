@@ -10,6 +10,12 @@ ln -s ~/git-checkpoint/bin/gc ~/bin/gc
 ln -s ~/git-checkpoint/bin/gc ~/bin/gc-clone
 ```
 
+Install dependencies:
+
+```
+bun install
+```
+
 Or install via npm:
 
 ```
@@ -104,8 +110,7 @@ gc switch <repo>
 
 Updates the `current` symlink to point at the selected checkpoint.
 If you run `gc switch <repo>` with no name, it opens an interactive
-picker (auto-installs `fzf` to `~/.fzf/bin` if missing; otherwise falls
-back to a numbered list) showing last activity.
+picker (via `inquirer`) showing last activity.
 
 Example:
 

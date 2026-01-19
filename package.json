@@ -1,10 +1,13 @@
 {
   "name": "git-checkpoint",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Lightweight checkpointing for local git repos",
   "type": "module",
   "bin": {
     "gc": "bin/gc"
+  },
+  "dependencies": {
+    "inquirer": "^9.3.7"
   },
   "files": [
     "bin/gc",

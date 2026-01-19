@@ -2,14 +2,11 @@
 import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, resolve } from "path";
 import {
-  closeSync,
   existsSync,
   mkdirSync,
-  openSync,
   readdirSync,
   readFileSync,
   readlinkSync,
-  readSync,
   realpathSync,
   rmSync,
   statSync,
@@ -81,37 +78,6 @@ function run(cmd, cwd) {
     process.exit(res.exitCode || 1);
   }
   return res;
-}
-
-function findFzf() {
-  const fromPath = Bun.which("fzf");
-  if (fromPath) return fromPath;
-  const localFzf = join(HOME_DIR, ".fzf", "bin", "fzf");
-  if (existsSync(localFzf)) return localFzf;
-  return "";
-}
-
-function installFzf() {
-  const gitPath = Bun.which("git");
-  if (!gitPath) return "";
-  const fzfDir = join(HOME_DIR, ".fzf");
-  if (!existsSync(fzfDir)) {
-    process.stderr.write("gc: installing fzf into ~/.fzf/bin...\n");
-    run([gitPath, "clone", "--depth", "1", "https://github.com/junegunn/fzf.git", fzfDir]);
-  }
-  const installScript = join(fzfDir, "install");
-  if (existsSync(installScript)) {
-    run([installScript, "--bin"], fzfDir);
-  }
-  const localFzf = join(fzfDir, "bin", "fzf");
-  if (existsSync(localFzf)) return localFzf;
-  return "";
-}
-
-function ensureFzf() {
-  const existing = findFzf();
-  if (existing) return existing;
-  return installFzf();
 }
 
 function listCheckpoints(baseDir) {
@@ -230,27 +196,16 @@ function listWithActivity(baseDir, output = process.stdout) {
   }
 }
 
-function readLine(prompt) {
+async function loadInquirer() {
   try {
-    const fd = openSync("/dev/tty", "r");
-    process.stderr.write(prompt);
-    const buf = Buffer.alloc(1);
-    let line = "";
-    while (true) {
-      const bytes = readSync(fd, buf, 0, 1, null);
-      if (bytes <= 0) break;
-      const ch = buf.toString();
-      if (ch === "\n") break;
-      if (ch !== "\r") line += ch;
-    }
-    closeSync(fd);
-    return line.trim();
+    const mod = await import("inquirer");
+    return mod.default || mod;
   } catch {
-    return "";
+    die('inquirer not installed. run "bun install" or "npm install" in ~/git-checkpoint');
   }
 }
 
-function pickCheckpointInteractive(baseDir) {
+async function pickCheckpointInteractive(baseDir) {
   const names = listCheckpoints(baseDir);
   if (names.length === 0) {
     die("no checkpoints found");
@@ -260,52 +215,31 @@ function pickCheckpointInteractive(baseDir) {
   const indexed = ensureIndex(baseDir, names).filter((item) => nameSet.has(item.name));
   const now = Date.now();
   const currentName = currentCheckpointName(baseDir);
-
-  const fzfPath = ensureFzf();
-  if (fzfPath) {
-    const lines = indexed
-      .slice()
-      .sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }))
-      .map((item) => {
-        const age = formatAge(now - item.mtimeMs);
-        const stamp = item.lastModified || new Date(item.mtimeMs).toISOString();
-        const mark = item.name === currentName ? "*" : " ";
-        return `${mark} ${item.name}\t${age}\t${stamp}`;
-      })
-      .join("\n");
-
-    const res = Bun.spawnSync({
-      cmd: [
-        fzfPath,
-        "--prompt",
-        "checkpoint> ",
-        "--with-nth=1,2,3",
-        "--delimiter",
-        "\t",
-        "--ansi",
-      ],
-      stdin: new TextEncoder().encode(lines + "\n"),
-      stdout: "pipe",
-      stderr: "inherit",
+  const inquirer = await loadInquirer();
+  const choices = indexed
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }))
+    .map((item) => {
+      const age = formatAge(now - item.mtimeMs);
+      const stamp = item.lastModified || new Date(item.mtimeMs).toISOString();
+      const mark = item.name === currentName ? "*" : " ";
+      return {
+        name: `${mark} ${item.name}  ${age}  (${stamp})`,
+        value: item.name,
+      };
     });
 
-    if (res.exitCode !== 0) return "";
-    const selected = new TextDecoder().decode(res.stdout).trim();
-    if (!selected) return "";
-    const name = selected.replace(/^\*\s+|\s+.*$/g, "");
-    return name;
-  }
+  const { checkpoint } = await inquirer.prompt([
+    {
+      type: "list",
+      name: "checkpoint",
+      message: "Select checkpoint",
+      pageSize: 12,
+      choices,
+    },
+  ]);
 
-  listWithActivity(baseDir, process.stderr);
-  const input = readLine("Select checkpoint (number or name, blank to cancel): ");
-  if (!input) return "";
-  if (/^\d+$/.test(input)) {
-    const candidate = `${basename(baseDir)}-${input}`;
-    if (existsSync(join(baseDir, candidate))) return candidate;
-  }
-  if (existsSync(join(baseDir, input))) return input;
-  die(`checkpoint not found: ${input} (try "gc list ${basename(baseDir)}")`);
-  return "";
+  return checkpoint || "";
 }
 
 function resolveName(baseDir, repo, nameOrNumber) {
@@ -552,7 +486,7 @@ if (cmd === "path") {
 if (cmd === "switch") {
   const nameOrNumber = args[2];
   if (!nameOrNumber) {
-    const picked = pickCheckpointInteractive(baseDir);
+    const picked = await pickCheckpointInteractive(baseDir);
     if (!picked) {
       process.stderr.write("no selection\n");
       process.exit(1);
