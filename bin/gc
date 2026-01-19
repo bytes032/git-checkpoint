@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpat
 const HOME_DIR = process.env.HOME || homedir();
 const DEFAULT_ROOT = process.env.GC_ROOT || join(HOME_DIR, "checkpoints");
 const CHECKPOINTS_HELP = `Checkpoints live at ${DEFAULT_ROOT}/<repo> by default.
-Set GC_ROOT to change the base directory.`;
+Set GC_ROOT to change the base directory (e.g. "export GC_ROOT=~/checkpoints").`;
 const INDEX_FILE = ".gc-index.json";
 
 function usage() {

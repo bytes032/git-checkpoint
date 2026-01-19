@@ -54,7 +54,11 @@ By default, checkpoints go to:
 ~/checkpoints/<repo>/<repo>-N
 ```
 
-Set `GC_ROOT` to change the base directory.
+Set `GC_ROOT` to change the base directory:
+
+```
+export GC_ROOT=~/checkpoints
+```
 
 ## Commands
 
