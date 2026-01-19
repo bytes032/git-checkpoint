@@ -24,9 +24,9 @@ gc() {
       ;;
     switch)
       command gc "$@"
-      local status=$?
-      if [ $status -ne 0 ]; then
-        return $status
+      local rc=$?
+      if [ $rc -ne 0 ]; then
+        return $rc
       fi
       local repo="$2"
       if [ -z "$repo" ]; then
