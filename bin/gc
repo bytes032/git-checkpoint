@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, resolve } from "path";
-import { existsSync, mkdirSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "fs";
 
 const HOME_DIR = process.env.HOME || homedir();
 const DEFAULT_ROOT = process.env.GC_ROOT || join(HOME_DIR, "checkpoints");
 const CHECKPOINTS_HELP = `Checkpoints live at ${DEFAULT_ROOT}/<repo> by default.
 Set GC_ROOT to change the base directory.`;
+const INDEX_FILE = ".gc-index.json";
 
 function usage() {
   const self = basename(process.argv[1] || "gc");
@@ -18,6 +19,7 @@ function usage() {
   ${self} list <repo>
   ${self} current <repo>
   ${self} switch <repo> <name-or-number>
+  ${self} clean <repo> --keep <n> [--dry-run]
   ${self} path <repo> <name-or-number>
   ${self} latest <repo>
 
@@ -26,6 +28,7 @@ Examples:
   ${self} clone --dest ${DEFAULT_ROOT} fafo
   ${self} list fafo
   ${self} switch fafo 2
+  ${self} clean fafo --keep 5
   ${self} current fafo
   cd "$(${self} path fafo 2)"
 
@@ -72,6 +75,63 @@ function listCheckpoints(baseDir) {
     .filter((d) => d.isDirectory() && d.name !== "current")
     .map((d) => d.name)
     .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+}
+
+function loadIndex(baseDir) {
+  const indexPath = join(baseDir, INDEX_FILE);
+  if (!existsSync(indexPath)) return { items: [] };
+  try {
+    const data = JSON.parse(readFileSync(indexPath, "utf8"));
+    if (data && Array.isArray(data.items)) return { items: data.items };
+  } catch {
+    // fall through to empty index
+  }
+  return { items: [] };
+}
+
+function saveIndex(baseDir, items) {
+  const indexPath = join(baseDir, INDEX_FILE);
+  const payload = { version: 1, items };
+  writeFileSync(indexPath, `${JSON.stringify(payload, null, 2)}\n`);
+}
+
+function ensureIndex(baseDir, names) {
+  const index = loadIndex(baseDir);
+  const map = new Map(index.items.map((item) => [item.name, item]));
+  let changed = false;
+
+  for (const name of names) {
+    if (map.has(name)) continue;
+    try {
+      const stat = statSync(join(baseDir, name));
+      map.set(name, { name, createdAt: new Date(stat.mtimeMs).toISOString() });
+      changed = true;
+    } catch {
+      map.set(name, { name, createdAt: new Date().toISOString() });
+      changed = true;
+    }
+  }
+
+  const items = Array.from(map.values());
+  if (changed) saveIndex(baseDir, items);
+  return items;
+}
+
+function recordCheckpoint(baseDir, name) {
+  const index = loadIndex(baseDir);
+  const now = new Date().toISOString();
+  const existing = index.items.find((item) => item.name === name);
+  if (existing) {
+    existing.createdAt = existing.createdAt || now;
+  } else {
+    index.items.push({ name, createdAt: now });
+  }
+  saveIndex(baseDir, index.items);
+}
+
+function parseTime(value) {
+  const ts = Date.parse(value || "");
+  return Number.isFinite(ts) ? ts : 0;
 }
 
 function resolveName(baseDir, repo, nameOrNumber) {
@@ -198,6 +258,10 @@ if (cmd === "clone") {
     run(["git", "clone", "--local", sourceRepo, target]);
   }
 
+  if (target.startsWith(destRoot + "/") || target === destRoot) {
+    recordCheckpoint(destRoot, basename(target));
+  }
+
   console.log(target);
   process.exit(0);
 }
@@ -228,6 +292,80 @@ if (cmd === "latest") {
   const items = listCheckpoints(baseDir);
   if (items.length === 0) die("no checkpoints found");
   console.log(join(baseDir, items[items.length - 1]));
+  process.exit(0);
+}
+
+if (cmd === "clean") {
+  let keep = 5;
+  let dryRun = false;
+
+  for (let i = 2; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--keep") {
+      const val = args[i + 1];
+      if (!val) die("--keep requires a number");
+      keep = Number(val);
+      i += 1;
+      continue;
+    }
+    if (arg === "--dry-run") {
+      dryRun = true;
+      continue;
+    }
+    if (arg === "--help" || arg === "-h") {
+      usage();
+      process.exit(0);
+    }
+  }
+
+  if (!Number.isFinite(keep) || keep < 0 || !Number.isInteger(keep)) {
+    die("--keep must be a non-negative integer");
+  }
+
+  const names = listCheckpoints(baseDir);
+  if (names.length === 0) {
+    process.stderr.write("no checkpoints found\n");
+    process.exit(0);
+  }
+
+  const nameSet = new Set(names);
+  const indexed = ensureIndex(baseDir, names).filter((item) => nameSet.has(item.name));
+  const ordered = indexed.slice().sort((a, b) => parseTime(a.createdAt) - parseTime(b.createdAt));
+
+  const removeCount = Math.max(0, ordered.length - keep);
+  let toRemove = ordered.slice(0, removeCount).map((item) => item.name);
+
+  const currentLink = join(baseDir, "current");
+  if (existsSync(currentLink)) {
+    try {
+      const currentTarget = readlinkSync(currentLink);
+      const currentName = basename(currentTarget);
+      toRemove = toRemove.filter((name) => name !== currentName);
+    } catch {
+      // ignore invalid symlink
+    }
+  }
+
+  if (toRemove.length === 0) {
+    process.stderr.write("nothing to clean\n");
+    process.exit(0);
+  }
+
+  if (dryRun) {
+    for (const name of toRemove) console.log(name);
+    process.exit(0);
+  }
+
+  for (const name of toRemove) {
+    rmSync(join(baseDir, name), { recursive: true, force: true });
+  }
+
+  const remaining = ordered
+    .filter((item) => !toRemove.includes(item.name))
+    .map((item) => ({ name: item.name, createdAt: item.createdAt }));
+  saveIndex(baseDir, remaining);
+
+  process.stderr.write(`removed ${toRemove.length} checkpoint(s)\n`);
   process.exit(0);
 }
 
