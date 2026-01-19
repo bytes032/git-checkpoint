@@ -1,7 +1,21 @@
 #!/usr/bin/env bun
 import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, resolve } from "path";
-import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "fs";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  readSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "fs";
 
 const HOME_DIR = process.env.HOME || homedir();
 const DEFAULT_ROOT = process.env.GC_ROOT || join(HOME_DIR, "checkpoints");
@@ -155,7 +169,19 @@ function formatAge(ms) {
   return `${years}y ago`;
 }
 
-function listWithActivity(baseDir) {
+function currentCheckpointName(baseDir) {
+  const currentLink = join(baseDir, "current");
+  if (existsSync(currentLink)) {
+    try {
+      return basename(readlinkSync(currentLink));
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function listWithActivity(baseDir, output = process.stdout) {
   const names = listCheckpoints(baseDir);
   if (names.length === 0) {
     process.stderr.write("no checkpoints found\n");
@@ -164,21 +190,91 @@ function listWithActivity(baseDir) {
   const nameSet = new Set(names);
   const indexed = ensureIndex(baseDir, names).filter((item) => nameSet.has(item.name));
   const now = Date.now();
-  const currentLink = join(baseDir, "current");
-  let currentName = "";
-  if (existsSync(currentLink)) {
-    try {
-      currentName = basename(readlinkSync(currentLink));
-    } catch {
-      currentName = "";
-    }
-  }
+  const currentName = currentCheckpointName(baseDir);
   for (const item of indexed.sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }))) {
     const age = formatAge(now - item.mtimeMs);
     const stamp = item.lastModified || new Date(item.mtimeMs).toISOString();
     const mark = item.name === currentName ? "*" : " ";
-    console.log(`${mark} ${item.name}  ${age}  (${stamp})`);
+    output.write(`${mark} ${item.name}  ${age}  (${stamp})\n`);
   }
+}
+
+function readLine(prompt) {
+  try {
+    const fd = openSync("/dev/tty", "r");
+    process.stderr.write(prompt);
+    const buf = Buffer.alloc(1);
+    let line = "";
+    while (true) {
+      const bytes = readSync(fd, buf, 0, 1, null);
+      if (bytes <= 0) break;
+      const ch = buf.toString();
+      if (ch === "\n") break;
+      if (ch !== "\r") line += ch;
+    }
+    closeSync(fd);
+    return line.trim();
+  } catch {
+    return "";
+  }
+}
+
+function pickCheckpointInteractive(baseDir) {
+  const names = listCheckpoints(baseDir);
+  if (names.length === 0) {
+    die("no checkpoints found");
+  }
+
+  const nameSet = new Set(names);
+  const indexed = ensureIndex(baseDir, names).filter((item) => nameSet.has(item.name));
+  const now = Date.now();
+  const currentName = currentCheckpointName(baseDir);
+
+  const fzfPath = Bun.which("fzf");
+  if (fzfPath) {
+    const lines = indexed
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }))
+      .map((item) => {
+        const age = formatAge(now - item.mtimeMs);
+        const stamp = item.lastModified || new Date(item.mtimeMs).toISOString();
+        const mark = item.name === currentName ? "*" : " ";
+        return `${mark} ${item.name}\t${age}\t${stamp}`;
+      })
+      .join("\n");
+
+    const res = Bun.spawnSync({
+      cmd: [
+        fzfPath,
+        "--prompt",
+        "checkpoint> ",
+        "--with-nth=1,2,3",
+        "--delimiter",
+        "\t",
+        "--ansi",
+      ],
+      stdin: new TextEncoder().encode(lines + "\n"),
+      stdout: "pipe",
+      stderr: "inherit",
+    });
+
+    if (res.exitCode !== 0) return "";
+    const selected = new TextDecoder().decode(res.stdout).trim();
+    if (!selected) return "";
+    const name = selected.replace(/^\*\s+|\s+.*$/g, "");
+    return name;
+  }
+
+  listWithActivity(baseDir, process.stderr);
+  const input = readLine("Select checkpoint (number or name, blank to cancel): ");
+  if (!input) return "";
+  if (/^\d+$/.test(input)) {
+    const candidate = `${basename(baseDir)}-${input}`;
+    if (existsSync(join(baseDir, candidate))) return candidate;
+  }
+  if (existsSync(join(baseDir, input))) return input;
+  die(`checkpoint not found: ${input} (try "gc list ${basename(baseDir)}")`);
+  return "";
 }
 
 function resolveName(baseDir, repo, nameOrNumber) {
@@ -425,7 +521,18 @@ if (cmd === "path") {
 if (cmd === "switch") {
   const nameOrNumber = args[2];
   if (!nameOrNumber) {
-    listWithActivity(baseDir);
+    const picked = pickCheckpointInteractive(baseDir);
+    if (!picked) {
+      process.stderr.write("no selection\n");
+      process.exit(1);
+    }
+    const target = join(baseDir, picked);
+    if (!isDir(target)) die(`checkpoint is not a directory: ${picked}`);
+    mkdirSync(baseDir, { recursive: true });
+    const current = join(baseDir, "current");
+    rmSync(current, { force: true });
+    symlinkSync(target, current);
+    console.log(current);
     process.exit(0);
   }
   const resolvedName = resolveName(baseDir, repo, nameOrNumber);
