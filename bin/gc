@@ -1,0 +1,244 @@
+#!/usr/bin/env bun
+import { basename, dirname, isAbsolute, join, resolve } from "path";
+import { existsSync, mkdirSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync } from "fs";
+
+const DEFAULT_ROOT = process.env.GC_ROOT || "/home/node/checkpoints";
+const CHECKPOINTS_HELP = `Checkpoints live at ${DEFAULT_ROOT}/<repo> by default.
+Set GC_ROOT to change the base directory.`;
+
+function usage() {
+  const self = basename(process.argv[1] || "gc");
+  console.log(`Usage:
+  ${self} clone <repo-path-or-name> [target-dir]
+  ${self} clone --copy <repo-path-or-name> [target-dir]
+  ${self} clone --dest <dir> <repo-path-or-name> [target-dir]
+  ${self} clone --prefix <name> <repo-path-or-name>
+  ${self} list <repo>
+  ${self} current <repo>
+  ${self} use <repo> <name-or-number>
+  ${self} path <repo> <name-or-number>
+  ${self} latest <repo>
+
+Examples:
+  ${self} clone fafo
+  ${self} clone --dest /home/node/checkpoints fafo
+  ${self} list fafo
+  ${self} use fafo 2
+  ${self} current fafo
+  cd "$(${self} path fafo 2)"
+
+Notes:
+  By default clone makes a full copy (tracked + untracked + ignored). Use
+  "clone --clone" for a local git clone of tracked files only.
+  Default output location is ${DEFAULT_ROOT}/<repo>/<repo>-N
+  (or ${DEFAULT_ROOT}/<repo>/<prefix>-N if --prefix is set).
+  ${CHECKPOINTS_HELP}`);
+}
+
+function die(msg, code = 1) {
+  process.stderr.write(`error: ${msg}\n`);
+  process.exit(code);
+}
+
+function isDir(p) {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function run(cmd, cwd) {
+  const res = Bun.spawnSync({
+    cmd,
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (res.exitCode !== 0) {
+    if (res.stderr?.length) {
+      process.stderr.write(res.stderr);
+    }
+    process.exit(res.exitCode || 1);
+  }
+  return res;
+}
+
+function listCheckpoints(baseDir) {
+  if (!isDir(baseDir)) return [];
+  return readdirSync(baseDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && d.name !== "current")
+    .map((d) => d.name)
+    .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+}
+
+function resolveName(baseDir, repo, nameOrNumber) {
+  if (!nameOrNumber) die("missing checkpoint name or number");
+  if (/^\d+$/.test(nameOrNumber)) {
+    const candidate = `${repo}-${nameOrNumber}`;
+    if (existsSync(join(baseDir, candidate))) return candidate;
+  }
+  if (existsSync(join(baseDir, nameOrNumber))) return nameOrNumber;
+  die(`checkpoint not found: ${nameOrNumber}`);
+}
+
+const scriptName = basename(process.argv[1] || "gc");
+let args = process.argv.slice(2);
+
+if (scriptName === "gc-clone" && (args[0] !== "clone")) {
+  args.unshift("clone");
+}
+
+const cmd = args[0];
+if (!cmd || cmd === "-h" || cmd === "--help" || cmd === "help") {
+  usage();
+  process.exit(cmd ? 0 : 1);
+}
+
+if (cmd === "clone") {
+  args = args.slice(1);
+  let mode = "copy";
+  let destRoot = "";
+  let prefix = "";
+
+  while (args.length > 0) {
+    const arg = args[0];
+    if (arg === "-h" || arg === "--help") {
+      usage();
+      process.exit(0);
+    }
+    if (arg === "--copy") {
+      mode = "copy";
+      args.shift();
+      continue;
+    }
+    if (arg === "--clone") {
+      mode = "clone";
+      args.shift();
+      continue;
+    }
+    if (arg === "--dest") {
+      const val = args[1];
+      if (!val) die("--dest requires a path");
+      destRoot = val;
+      args = args.slice(2);
+      continue;
+    }
+    if (arg === "--prefix") {
+      const val = args[1];
+      if (!val) die("--prefix requires a name");
+      prefix = val;
+      args = args.slice(2);
+      continue;
+    }
+    break;
+  }
+
+  const repoArg = args[0];
+  const targetArg = args[1] || "";
+  if (!repoArg) {
+    usage();
+    process.exit(1);
+  }
+
+  let sourceRepo = "";
+  if (isDir(repoArg)) {
+    sourceRepo = repoArg;
+  } else if (isDir(join("/home/node", repoArg))) {
+    sourceRepo = join("/home/node", repoArg);
+  } else {
+    die(`repo not found: ${repoArg}`);
+  }
+
+  run(["git", "-C", sourceRepo, "rev-parse", "--is-inside-work-tree"]);
+
+  sourceRepo = realpathSync(sourceRepo);
+  const baseName = basename(sourceRepo);
+
+  if (!destRoot) {
+    destRoot = DEFAULT_ROOT;
+  }
+  mkdirSync(destRoot, { recursive: true });
+  destRoot = realpathSync(destRoot);
+  destRoot = join(destRoot, baseName);
+
+  let target = "";
+  if (targetArg) {
+    target = isAbsolute(targetArg) ? targetArg : join(destRoot, targetArg);
+  } else {
+    const base = prefix || baseName;
+    let n = 1;
+    while (true) {
+      const candidate = join(destRoot, `${base}-${n}`);
+      if (!existsSync(candidate)) {
+        target = candidate;
+        break;
+      }
+      n += 1;
+    }
+  }
+
+  if (existsSync(target)) die(`target exists: ${target}`);
+  mkdirSync(dirname(target), { recursive: true });
+
+  if (mode === "copy") {
+    process.stderr.write("copying (this may take a while for large repos)...\n");
+    run(["cp", "-a", sourceRepo, target]);
+  } else {
+    run(["git", "clone", "--local", sourceRepo, target]);
+  }
+
+  console.log(target);
+  process.exit(0);
+}
+
+const repo = args[1];
+if (!repo) {
+  usage();
+  process.exit(1);
+}
+
+const baseDir = resolve(DEFAULT_ROOT, repo);
+
+if (cmd === "list") {
+  const items = listCheckpoints(baseDir);
+  for (const item of items) console.log(item);
+  process.exit(0);
+}
+
+if (cmd === "current") {
+  const current = join(baseDir, "current");
+  if (!existsSync(current)) die("current not set");
+  const target = readlinkSync(current);
+  console.log(target);
+  process.exit(0);
+}
+
+if (cmd === "latest") {
+  const items = listCheckpoints(baseDir);
+  if (items.length === 0) die("no checkpoints found");
+  console.log(join(baseDir, items[items.length - 1]));
+  process.exit(0);
+}
+
+if (cmd === "path") {
+  const nameOrNumber = args[2];
+  const resolvedName = resolveName(baseDir, repo, nameOrNumber);
+  console.log(join(baseDir, resolvedName));
+  process.exit(0);
+}
+
+if (cmd === "use") {
+  const nameOrNumber = args[2];
+  const resolvedName = resolveName(baseDir, repo, nameOrNumber);
+  const target = join(baseDir, resolvedName);
+  if (!isDir(target)) die(`checkpoint is not a directory: ${resolvedName}`);
+  mkdirSync(baseDir, { recursive: true });
+  const current = join(baseDir, "current");
+  rmSync(current, { force: true });
+  symlinkSync(target, current);
+  console.log(current);
+  process.exit(0);
+}
+
+die(`unknown command: ${cmd}`);
