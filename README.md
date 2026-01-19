@@ -5,9 +5,21 @@ Lightweight checkpointing for local git repos. Create full copies or fast local 
 ## Install
 
 ```
-mkdir -p /home/node/bin
-ln -s /home/node/git-checkpoint/bin/gc /home/node/bin/gc
-ln -s /home/node/git-checkpoint/bin/gc /home/node/bin/gc-clone
+mkdir -p ~/bin
+ln -s ~/git-checkpoint/bin/gc ~/bin/gc
+ln -s ~/git-checkpoint/bin/gc ~/bin/gc-clone
+```
+
+Or install via npm:
+
+```
+npm install -g ~/git-checkpoint
+```
+
+From GitHub:
+
+```
+npm install -g git+https://github.com/bytes032/git-checkpoint.git
 ```
 
 ## Shell Integration (auto-cd)
@@ -16,7 +28,7 @@ To automatically `cd` into a checkpoint after `gc clone` or `gc switch`,
 source the shell helper:
 
 ```
-source /home/node/git-checkpoint/shell/gc.sh
+source ~/git-checkpoint/shell/gc.sh
 ```
 
 Add that line to `~/.zshrc` or `~/.bashrc` to make it permanent.
@@ -28,13 +40,13 @@ gc clone fafo
 gc list fafo
 gc switch fafo 2
 gc current fafo
-cd /home/node/checkpoints/fafo/current
+cd ~/checkpoints/fafo/current
 ```
 
 By default, checkpoints go to:
 
 ```
-/home/node/checkpoints/<repo>/<repo>-N
+~/checkpoints/<repo>/<repo>-N
 ```
 
 Set `GC_ROOT` to change the base directory.
@@ -63,7 +75,7 @@ Examples:
 gc clone fafo
 gc clone --clone fafo
 gc clone --prefix work fafo
-gc clone --dest /home/node/checkpoints fafo
+gc clone --dest ~/checkpoints fafo
 ```
 
 ### gc list
@@ -86,7 +98,7 @@ Example:
 
 ```
 gc switch fafo 2
-cd /home/node/checkpoints/fafo/current
+cd ~/checkpoints/fafo/current
 ```
 
 ### gc current
@@ -124,7 +136,9 @@ Prints the most recent checkpoint path.
 
 - Default clone mode is a full copy (tracked + untracked + ignored).
 - Use `gc clone --clone` for a local git clone of tracked files only.
+- Copy mode uses `rsync` for speed and progress output.
+- If `rsync` isn’t available, use `gc clone --clone`.
 
 ## Config
 
-- `GC_ROOT`: override the default checkpoint root (defaults to `/home/node/checkpoints`).
+- `GC_ROOT`: override the default checkpoint root (defaults to `~/checkpoints`).

@@ -1,8 +1,10 @@
 #!/usr/bin/env bun
+import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, resolve } from "path";
 import { existsSync, mkdirSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync } from "fs";
 
-const DEFAULT_ROOT = process.env.GC_ROOT || "/home/node/checkpoints";
+const HOME_DIR = process.env.HOME || homedir();
+const DEFAULT_ROOT = process.env.GC_ROOT || join(HOME_DIR, "checkpoints");
 const CHECKPOINTS_HELP = `Checkpoints live at ${DEFAULT_ROOT}/<repo> by default.
 Set GC_ROOT to change the base directory.`;
 
@@ -21,7 +23,7 @@ function usage() {
 
 Examples:
   ${self} clone fafo
-  ${self} clone --dest /home/node/checkpoints fafo
+  ${self} clone --dest ${DEFAULT_ROOT} fafo
   ${self} list fafo
   ${self} switch fafo 2
   ${self} current fafo
@@ -144,8 +146,10 @@ if (cmd === "clone") {
   let sourceRepo = "";
   if (isDir(repoArg)) {
     sourceRepo = repoArg;
-  } else if (isDir(join("/home/node", repoArg))) {
-    sourceRepo = join("/home/node", repoArg);
+  } else if (isDir(join(process.cwd(), repoArg))) {
+    sourceRepo = join(process.cwd(), repoArg);
+  } else if (isDir(join(HOME_DIR, repoArg))) {
+    sourceRepo = join(HOME_DIR, repoArg);
   } else {
     die(`repo not found: ${repoArg}`);
   }
@@ -183,7 +187,13 @@ if (cmd === "clone") {
 
   if (mode === "copy") {
     process.stderr.write("copying (this may take a while for large repos)...\n");
-    run(["cp", "-a", sourceRepo, target]);
+    const sourceWithSlash = sourceRepo.endsWith("/") ? sourceRepo : `${sourceRepo}/`;
+    const targetWithSlash = target.endsWith("/") ? target : `${target}/`;
+    const rsyncPath = Bun.which("rsync");
+    if (!rsyncPath) {
+      die("rsync not found. install rsync or use \"gc clone --clone\"");
+    }
+    run([rsyncPath, "-a", "--info=progress2", sourceWithSlash, targetWithSlash]);
   } else {
     run(["git", "clone", "--local", sourceRepo, target]);
   }

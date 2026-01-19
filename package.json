@@ -1,0 +1,19 @@
+{
+  "name": "git-checkpoint",
+  "version": "0.1.0",
+  "description": "Lightweight checkpointing for local git repos",
+  "type": "module",
+  "bin": {
+    "gc": "bin/gc"
+  },
+  "files": [
+    "bin/gc",
+    "shell/gc.sh",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bytes032/git-checkpoint.git"
+  },
+  "license": "UNLICENSED"
+}
