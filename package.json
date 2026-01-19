@@ -1,6 +1,6 @@
 {
   "name": "git-checkpoint",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Lightweight checkpointing for local git repos",
   "type": "module",
   "bin": {

@@ -83,6 +83,37 @@ function run(cmd, cwd) {
   return res;
 }
 
+function findFzf() {
+  const fromPath = Bun.which("fzf");
+  if (fromPath) return fromPath;
+  const localFzf = join(HOME_DIR, ".fzf", "bin", "fzf");
+  if (existsSync(localFzf)) return localFzf;
+  return "";
+}
+
+function installFzf() {
+  const gitPath = Bun.which("git");
+  if (!gitPath) return "";
+  const fzfDir = join(HOME_DIR, ".fzf");
+  if (!existsSync(fzfDir)) {
+    process.stderr.write("gc: installing fzf into ~/.fzf/bin...\n");
+    run([gitPath, "clone", "--depth", "1", "https://github.com/junegunn/fzf.git", fzfDir]);
+  }
+  const installScript = join(fzfDir, "install");
+  if (existsSync(installScript)) {
+    run([installScript, "--bin"], fzfDir);
+  }
+  const localFzf = join(fzfDir, "bin", "fzf");
+  if (existsSync(localFzf)) return localFzf;
+  return "";
+}
+
+function ensureFzf() {
+  const existing = findFzf();
+  if (existing) return existing;
+  return installFzf();
+}
+
 function listCheckpoints(baseDir) {
   if (!isDir(baseDir)) return [];
   return readdirSync(baseDir, { withFileTypes: true })
@@ -230,7 +261,7 @@ function pickCheckpointInteractive(baseDir) {
   const now = Date.now();
   const currentName = currentCheckpointName(baseDir);
 
-  const fzfPath = Bun.which("fzf");
+  const fzfPath = ensureFzf();
   if (fzfPath) {
     const lines = indexed
       .slice()

@@ -104,8 +104,8 @@ gc switch <repo>
 
 Updates the `current` symlink to point at the selected checkpoint.
 If you run `gc switch <repo>` with no name, it opens an interactive
-picker (uses `fzf` if available; otherwise falls back to a numbered list)
-showing last activity.
+picker (auto-installs `fzf` to `~/.fzf/bin` if missing; otherwise falls
+back to a numbered list) showing last activity.
 
 Example:
 
