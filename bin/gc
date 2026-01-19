@@ -15,7 +15,7 @@ function usage() {
   ${self} clone --prefix <name> <repo-path-or-name>
   ${self} list <repo>
   ${self} current <repo>
-  ${self} use <repo> <name-or-number>
+  ${self} switch <repo> <name-or-number>
   ${self} path <repo> <name-or-number>
   ${self} latest <repo>
 
@@ -23,7 +23,7 @@ Examples:
   ${self} clone fafo
   ${self} clone --dest /home/node/checkpoints fafo
   ${self} list fafo
-  ${self} use fafo 2
+  ${self} switch fafo 2
   ${self} current fafo
   cd "$(${self} path fafo 2)"
 
@@ -79,7 +79,7 @@ function resolveName(baseDir, repo, nameOrNumber) {
     if (existsSync(join(baseDir, candidate))) return candidate;
   }
   if (existsSync(join(baseDir, nameOrNumber))) return nameOrNumber;
-  die(`checkpoint not found: ${nameOrNumber}`);
+  die(`checkpoint not found: ${nameOrNumber} (try "gc list ${repo}")`);
 }
 
 const scriptName = basename(process.argv[1] || "gc");
@@ -228,7 +228,7 @@ if (cmd === "path") {
   process.exit(0);
 }
 
-if (cmd === "use") {
+if (cmd === "switch") {
   const nameOrNumber = args[2];
   const resolvedName = resolveName(baseDir, repo, nameOrNumber);
   const target = join(baseDir, resolvedName);

@@ -12,7 +12,7 @@ ln -s /home/node/git-checkpoint/bin/gc /home/node/bin/gc-clone
 
 ## Shell Integration (auto-cd)
 
-To automatically `cd` into a checkpoint after `gc clone` or `gc use`,
+To automatically `cd` into a checkpoint after `gc clone` or `gc switch`,
 source the shell helper:
 
 ```
@@ -26,7 +26,7 @@ Add that line to `~/.zshrc` or `~/.bashrc` to make it permanent.
 ```
 gc clone fafo
 gc list fafo
-gc use fafo 2
+gc switch fafo 2
 gc current fafo
 cd /home/node/checkpoints/fafo/current
 ```
@@ -74,10 +74,10 @@ gc list <repo>
 
 Lists available checkpoints for a repo.
 
-### gc use
+### gc switch
 
 ```
-gc use <repo> <name-or-number>
+gc switch <repo> <name-or-number>
 ```
 
 Updates the `current` symlink to point at the selected checkpoint.
@@ -85,7 +85,7 @@ Updates the `current` symlink to point at the selected checkpoint.
 Example:
 
 ```
-gc use fafo 2
+gc switch fafo 2
 cd /home/node/checkpoints/fafo/current
 ```
 
@@ -115,7 +115,7 @@ Prints the most recent checkpoint path.
 
 - `gc clone <repo-path-or-name> [target-dir]`
 - `gc list <repo>`
-- `gc use <repo> <name-or-number>`
+- `gc switch <repo> <name-or-number>`
 - `gc current <repo>`
 - `gc path <repo> <name-or-number>`
 - `gc latest <repo>`

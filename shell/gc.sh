@@ -5,7 +5,7 @@ gc() {
   fi
 
   case "$1" in
-    clone|use)
+    clone|switch)
       local out
       out="$(command gc "$@")" || return $?
       if [ -n "$out" ]; then
