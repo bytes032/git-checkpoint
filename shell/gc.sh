@@ -1,3 +1,5 @@
+unalias gc 2>/dev/null
+
 gc() {
   if [ $# -eq 0 ]; then
     command gc

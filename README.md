@@ -32,6 +32,8 @@ source ~/git-checkpoint/shell/gc.sh
 ```
 
 Add that line to `~/.zshrc` or `~/.bashrc` to make it permanent.
+If you use oh-my-zsh, it may define a `gc` git alias; the helper will
+`unalias gc` so the CLI can take over.
 
 ## Quickstart
 
