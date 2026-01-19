@@ -19,7 +19,7 @@ function usage() {
   ${self} list <repo>
   ${self} current <repo>
   ${self} switch <repo> <name-or-number>
-  ${self} clean <repo> --keep <n> [--dry-run]
+  ${self} clean <repo> [--days <n>] [--dry-run]
   ${self} path <repo> <name-or-number>
   ${self} latest <repo>
 
@@ -28,7 +28,7 @@ Examples:
   ${self} clone --dest ${DEFAULT_ROOT} fafo
   ${self} list fafo
   ${self} switch fafo 2
-  ${self} clean fafo --keep 5
+  ${self} clean fafo --days 90
   ${self} current fafo
   cd "$(${self} path fafo 2)"
 
@@ -99,22 +99,32 @@ function ensureIndex(baseDir, names) {
   const index = loadIndex(baseDir);
   const map = new Map(index.items.map((item) => [item.name, item]));
   let changed = false;
+  const info = [];
 
   for (const name of names) {
-    if (map.has(name)) continue;
+    let mtimeMs = 0;
     try {
       const stat = statSync(join(baseDir, name));
-      map.set(name, { name, createdAt: new Date(stat.mtimeMs).toISOString() });
-      changed = true;
+      mtimeMs = stat.mtimeMs;
     } catch {
-      map.set(name, { name, createdAt: new Date().toISOString() });
+      mtimeMs = Date.now();
+    }
+
+    const existing = map.get(name);
+    const createdAt = existing?.createdAt || new Date(mtimeMs).toISOString();
+    const lastModified = new Date(mtimeMs).toISOString();
+
+    if (!existing || !existing.createdAt || existing.lastModified !== lastModified) {
+      map.set(name, { name, createdAt, lastModified });
       changed = true;
     }
+
+    info.push({ name, createdAt, lastModified, mtimeMs });
   }
 
   const items = Array.from(map.values());
   if (changed) saveIndex(baseDir, items);
-  return items;
+  return info;
 }
 
 function recordCheckpoint(baseDir, name) {
@@ -123,15 +133,11 @@ function recordCheckpoint(baseDir, name) {
   const existing = index.items.find((item) => item.name === name);
   if (existing) {
     existing.createdAt = existing.createdAt || now;
+    existing.lastModified = now;
   } else {
-    index.items.push({ name, createdAt: now });
+    index.items.push({ name, createdAt: now, lastModified: now });
   }
   saveIndex(baseDir, index.items);
-}
-
-function parseTime(value) {
-  const ts = Date.parse(value || "");
-  return Number.isFinite(ts) ? ts : 0;
 }
 
 function resolveName(baseDir, repo, nameOrNumber) {
@@ -296,15 +302,15 @@ if (cmd === "latest") {
 }
 
 if (cmd === "clean") {
-  let keep = 5;
+  let days = 90;
   let dryRun = false;
 
   for (let i = 2; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--keep") {
+    if (arg === "--days" || arg === "--older-than") {
       const val = args[i + 1];
-      if (!val) die("--keep requires a number");
-      keep = Number(val);
+      if (!val) die(`${arg} requires a number`);
+      days = Number(val);
       i += 1;
       continue;
     }
@@ -318,8 +324,8 @@ if (cmd === "clean") {
     }
   }
 
-  if (!Number.isFinite(keep) || keep < 0 || !Number.isInteger(keep)) {
-    die("--keep must be a non-negative integer");
+  if (!Number.isFinite(days) || days < 0) {
+    die("--days must be a non-negative number");
   }
 
   const names = listCheckpoints(baseDir);
@@ -330,10 +336,9 @@ if (cmd === "clean") {
 
   const nameSet = new Set(names);
   const indexed = ensureIndex(baseDir, names).filter((item) => nameSet.has(item.name));
-  const ordered = indexed.slice().sort((a, b) => parseTime(a.createdAt) - parseTime(b.createdAt));
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 
-  const removeCount = Math.max(0, ordered.length - keep);
-  let toRemove = ordered.slice(0, removeCount).map((item) => item.name);
+  let toRemove = indexed.filter((item) => item.mtimeMs < cutoff).map((item) => item.name);
 
   const currentLink = join(baseDir, "current");
   if (existsSync(currentLink)) {
@@ -360,9 +365,9 @@ if (cmd === "clean") {
     rmSync(join(baseDir, name), { recursive: true, force: true });
   }
 
-  const remaining = ordered
-    .filter((item) => !toRemove.includes(item.name))
-    .map((item) => ({ name: item.name, createdAt: item.createdAt }));
+  const remainingNames = new Set(names.filter((name) => !toRemove.includes(name)));
+  const existingIndex = loadIndex(baseDir);
+  const remaining = existingIndex.items.filter((item) => remainingNames.has(item.name));
   saveIndex(baseDir, remaining);
 
   process.stderr.write(`removed ${toRemove.length} checkpoint(s)\n`);

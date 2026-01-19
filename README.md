@@ -39,7 +39,7 @@ Add that line to `~/.zshrc` or `~/.bashrc` to make it permanent.
 gc clone fafo
 gc list fafo
 gc switch fafo 2
-gc clean fafo --keep 5
+gc clean fafo --days 90
 gc current fafo
 cd ~/checkpoints/fafo/current
 ```
@@ -105,18 +105,18 @@ cd ~/checkpoints/fafo/current
 ### gc clean
 
 ```
-gc clean <repo> --keep <n> [--dry-run]
+gc clean <repo> [--days <n>] [--dry-run]
 ```
 
-Removes older checkpoints, keeping the newest `<n>`. Uses an index file to
-track creation order (`.gc-index.json`) and falls back to directory mtime for
-older checkpoints created before the index existed.
+Removes checkpoints that have **not** changed in the last `<n>` days (default 90).
+Uses an index file (`.gc-index.json`) to track creation time and current directory
+mtime for change detection.
 
 Example:
 
 ```
-gc clean fafo --keep 5
-gc clean fafo --keep 5 --dry-run
+gc clean fafo --days 90
+gc clean fafo --days 90 --dry-run
 ```
 
 ### gc current
@@ -146,7 +146,7 @@ Prints the most recent checkpoint path.
 - `gc clone <repo-path-or-name> [target-dir]`
 - `gc list <repo>`
 - `gc switch <repo> <name-or-number>`
-- `gc clean <repo> --keep <n> [--dry-run]`
+- `gc clean <repo> [--days <n>] [--dry-run]`
 - `gc current <repo>`
 - `gc path <repo> <name-or-number>`
 - `gc latest <repo>`
