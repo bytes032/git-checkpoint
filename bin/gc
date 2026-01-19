@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, resolve } from "path";
+import readline from "readline";
 import {
   existsSync,
   mkdirSync,
@@ -30,6 +31,7 @@ function usage() {
   ${self} list <repo>
   ${self} current <repo>
   ${self} switch <repo> <name-or-number>
+  ${self} switch
   ${self} clean <repo> [--days <n>] [--dry-run]
   ${self} path <repo> <name-or-number>
   ${self} latest <repo>
@@ -39,6 +41,7 @@ Examples:
   ${self} clone --dest ${DEFAULT_ROOT} fafo
   ${self} list fafo
   ${self} switch fafo 2
+  ${self} switch
   ${self} clean fafo --days 90
   ${self} current fafo
   cd "$(${self} path fafo 2)"
@@ -78,6 +81,18 @@ function run(cmd, cwd) {
     process.exit(res.exitCode || 1);
   }
   return res;
+}
+
+function installEscapeHandler() {
+  const onKey = (_value, key) => {
+    if (key && key.name === "escape") {
+      process.stdout.write("\x1B[?25h\n");
+      process.exit(130);
+    }
+  };
+  readline.emitKeypressEvents(process.stdin);
+  process.stdin.on("keypress", onKey);
+  return () => process.stdin.off("keypress", onKey);
 }
 
 function listCheckpoints(baseDir) {
@@ -221,6 +236,27 @@ async function loadInquirer() {
   }
 }
 
+async function promptList(message, choices) {
+  const inquirer = await loadInquirer();
+  const cleanup = installEscapeHandler();
+  try {
+    const { value } = await inquirer.prompt([
+      {
+        type: "list",
+        name: "value",
+        message,
+        pageSize: 12,
+        choices,
+      },
+    ]);
+    return value || "";
+  } catch {
+    return "";
+  } finally {
+    cleanup();
+  }
+}
+
 async function pickCheckpointInteractive(baseDir) {
   const names = listCheckpoints(baseDir);
   if (names.length === 0) {
@@ -231,7 +267,6 @@ async function pickCheckpointInteractive(baseDir) {
   const indexed = ensureIndex(baseDir, names).filter((item) => nameSet.has(item.name));
   const now = Date.now();
   const currentName = currentCheckpointName(baseDir);
-  const inquirer = await loadInquirer();
   const choices = indexed
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }))
@@ -244,21 +279,23 @@ async function pickCheckpointInteractive(baseDir) {
         value: item.name,
       };
     });
+  return promptList("Select checkpoint", choices);
+}
 
-  try {
-    const { checkpoint } = await inquirer.prompt([
-      {
-        type: "list",
-        name: "checkpoint",
-        message: "Select checkpoint",
-        pageSize: 12,
-        choices,
-      },
-    ]);
-    return checkpoint || "";
-  } catch {
-    return "";
+async function pickRepoInteractive() {
+  const root = DEFAULT_ROOT;
+  if (!existsSync(root)) {
+    die("no checkpoints found");
   }
+  const repos = readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+  if (repos.length === 0) {
+    die("no checkpoints found");
+  }
+  const choices = repos.map((repo) => ({ name: repo, value: repo }));
+  return promptList("Select repo", choices);
 }
 
 function resolveName(baseDir, repo, nameOrNumber) {
@@ -393,6 +430,45 @@ if (cmd === "clone") {
   process.exit(0);
 }
 
+if (cmd === "switch") {
+  let repo = args[1];
+  let nameOrNumber = args[2];
+  if (!repo) {
+    repo = await pickRepoInteractive();
+    if (!repo) {
+      process.exit(130);
+    }
+  }
+  const baseDir = resolve(DEFAULT_ROOT, repo);
+  if (!nameOrNumber) {
+    const picked = await pickCheckpointInteractive(baseDir);
+    if (!picked) {
+      process.exit(130);
+    }
+    const target = join(baseDir, picked);
+    if (!isDir(target)) die(`checkpoint is not a directory: ${picked}`);
+    mkdirSync(baseDir, { recursive: true });
+    const current = join(baseDir, "current");
+    rmSync(current, { force: true });
+    symlinkSync(target, current);
+    mkdirSync(DEFAULT_ROOT, { recursive: true });
+    writeFileSync(join(DEFAULT_ROOT, ".gc-last-switch"), `${current}\n`);
+    console.log(current);
+    process.exit(0);
+  }
+  const resolvedName = resolveName(baseDir, repo, nameOrNumber);
+  const target = join(baseDir, resolvedName);
+  if (!isDir(target)) die(`checkpoint is not a directory: ${resolvedName}`);
+  mkdirSync(baseDir, { recursive: true });
+  const current = join(baseDir, "current");
+  rmSync(current, { force: true });
+  symlinkSync(target, current);
+  mkdirSync(DEFAULT_ROOT, { recursive: true });
+  writeFileSync(join(DEFAULT_ROOT, ".gc-last-switch"), `${current}\n`);
+  console.log(current);
+  process.exit(0);
+}
+
 const repo = args[1];
 if (!repo) {
   usage();
@@ -499,33 +575,6 @@ if (cmd === "path") {
   const nameOrNumber = args[2];
   const resolvedName = resolveName(baseDir, repo, nameOrNumber);
   console.log(join(baseDir, resolvedName));
-  process.exit(0);
-}
-
-if (cmd === "switch") {
-  const nameOrNumber = args[2];
-  if (!nameOrNumber) {
-    const picked = await pickCheckpointInteractive(baseDir);
-    if (!picked) {
-      process.exit(130);
-    }
-    const target = join(baseDir, picked);
-    if (!isDir(target)) die(`checkpoint is not a directory: ${picked}`);
-    mkdirSync(baseDir, { recursive: true });
-    const current = join(baseDir, "current");
-    rmSync(current, { force: true });
-    symlinkSync(target, current);
-    console.log(current);
-    process.exit(0);
-  }
-  const resolvedName = resolveName(baseDir, repo, nameOrNumber);
-  const target = join(baseDir, resolvedName);
-  if (!isDir(target)) die(`checkpoint is not a directory: ${resolvedName}`);
-  mkdirSync(baseDir, { recursive: true });
-  const current = join(baseDir, "current");
-  rmSync(current, { force: true });
-  symlinkSync(target, current);
-  console.log(current);
   process.exit(0);
 }
 

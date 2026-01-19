@@ -49,6 +49,7 @@ named `origin` exists.
 gc clone fafo
 gc list fafo
 gc switch fafo 2
+gc switch
 gc clean fafo --days 90
 gc current fafo
 cd ~/checkpoints/fafo/current
@@ -106,11 +107,14 @@ Lists available checkpoints for a repo.
 ```
 gc switch <repo> <name-or-number>
 gc switch <repo>
+gc switch
 ```
 
 Updates the `current` symlink to point at the selected checkpoint.
 If you run `gc switch <repo>` with no name, it opens an interactive
 picker (via `inquirer`) showing last activity.
+If you run `gc switch` with no repo, it first lets you pick a repo, then a checkpoint.
+Press Esc to cancel the picker.
 
 Example:
 

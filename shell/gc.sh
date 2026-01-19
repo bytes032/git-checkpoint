@@ -29,11 +29,15 @@ gc() {
         return $rc
       fi
       local repo="$2"
-      if [ -z "$repo" ]; then
-        return 0
-      fi
       local out
-      out="$(command gc current "$repo" 2>/dev/null)" || return 0
+      if [ -n "$repo" ]; then
+        out="$(command gc current "$repo" 2>/dev/null)" || return 0
+      else
+        local root="${GC_ROOT:-$HOME/checkpoints}"
+        if [ -f "$root/.gc-last-switch" ]; then
+          out="$(cat "$root/.gc-last-switch")"
+        fi
+      fi
       if [ -n "$out" ]; then
         cd "$out" || return $?
         if command git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
