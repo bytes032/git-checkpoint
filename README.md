@@ -42,6 +42,7 @@ If you use oh-my-zsh, it may define a `gc` git alias; the helper will
 `unalias gc` so the CLI can take over.
 The helper also runs `git pull --ff-only` after switching, when a remote
 named `origin` exists.
+When you run `gc delete`, the helper will `cd` you back to `~`.
 
 ## Quickstart
 
@@ -50,6 +51,7 @@ gc clone fafo
 gc list fafo
 gc switch fafo 2
 gc switch
+gc delete
 gc clean fafo --days 90
 gc current fafo
 cd ~/checkpoints/fafo/current
@@ -148,6 +150,18 @@ gc current <repo>
 
 Prints the current checkpoint path (via the `current` symlink).
 
+### gc delete
+
+```
+gc delete
+gc delete <repo> <name-or-number>
+```
+
+Removes a checkpoint directory.
+
+- With no arguments, it deletes the checkpoint that contains your current working directory.
+- With `<repo> <name-or-number>`, it deletes that checkpoint directly.
+
 ### gc path
 
 ```
@@ -169,6 +183,8 @@ Prints the most recent checkpoint path.
 - `gc switch <repo> <name-or-number>`
 - `gc clean <repo> [--days <n>] [--dry-run]`
 - `gc current <repo>`
+- `gc delete`
+- `gc delete <repo> <name-or-number>`
 - `gc path <repo> <name-or-number>`
 - `gc latest <repo>`
 

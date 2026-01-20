@@ -50,6 +50,14 @@ gc() {
         printf '%s\n' "$out"
       fi
       ;;
+    delete)
+      command gc "$@"
+      local rc=$?
+      if [ $rc -ne 0 ]; then
+        return $rc
+      fi
+      cd "$HOME" || return $?
+      ;;
     *)
       command gc "$@"
       ;;

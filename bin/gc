@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { homedir } from "os";
-import { basename, dirname, isAbsolute, join, resolve } from "path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import readline from "readline";
 import {
   existsSync,
@@ -32,6 +32,8 @@ function usage() {
   ${self} current <repo>
   ${self} switch <repo> <name-or-number>
   ${self} switch
+  ${self} delete
+  ${self} delete <repo> <name-or-number>
   ${self} clean <repo> [--days <n>] [--dry-run]
   ${self} path <repo> <name-or-number>
   ${self} latest <repo>
@@ -42,6 +44,8 @@ Examples:
   ${self} list fafo
   ${self} switch fafo 2
   ${self} switch
+  ${self} delete
+  ${self} delete fafo 2
   ${self} clean fafo --days 90
   ${self} current fafo
   cd "$(${self} path fafo 2)"
@@ -308,6 +312,52 @@ function resolveName(baseDir, repo, nameOrNumber) {
   die(`checkpoint not found: ${nameOrNumber} (try "gc list ${repo}")`);
 }
 
+function resolveCheckpointFromCwd() {
+  const root = existsSync(DEFAULT_ROOT) ? realpathSync(DEFAULT_ROOT) : resolve(DEFAULT_ROOT);
+  const cwd = realpathSync(process.cwd());
+  const rel = relative(root, cwd);
+  if (!rel || rel === "." || rel.startsWith("..")) {
+    die(`not inside ${root}`);
+  }
+  const parts = rel.split(sep).filter(Boolean);
+  if (parts.length < 2) {
+    die("not inside a checkpoint directory");
+  }
+  const repo = parts[0];
+  const name = parts[1];
+  const baseDir = join(root, repo);
+  return { baseDir, name };
+}
+
+function removeCheckpoint(baseDir, name) {
+  const target = join(baseDir, name);
+  if (!isDir(target)) die(`checkpoint is not a directory: ${name}`);
+
+  const currentLink = join(baseDir, "current");
+  if (existsSync(currentLink)) {
+    try {
+      const currentTarget = readlinkSync(currentLink);
+      const resolvedCurrent = realpathSync(currentTarget);
+      const resolvedTarget = realpathSync(target);
+      if (resolvedCurrent === resolvedTarget) {
+        rmSync(currentLink, { force: true });
+      }
+    } catch {
+      // ignore invalid symlink
+    }
+  }
+
+  rmSync(target, { recursive: true, force: true });
+
+  const existingIndex = loadIndex(baseDir);
+  if (existingIndex.items.length) {
+    const remaining = existingIndex.items.filter((item) => item.name !== name);
+    if (remaining.length !== existingIndex.items.length) {
+      saveIndex(baseDir, remaining);
+    }
+  }
+}
+
 const scriptName = basename(process.argv[1] || "gc");
 let args = process.argv.slice(2);
 
@@ -467,6 +517,25 @@ if (cmd === "switch") {
   writeFileSync(join(DEFAULT_ROOT, ".gc-last-switch"), `${current}\n`);
   console.log(current);
   process.exit(0);
+}
+
+if (cmd === "delete") {
+  if (args.length === 1) {
+    const { baseDir, name } = resolveCheckpointFromCwd();
+    removeCheckpoint(baseDir, name);
+    process.stderr.write(`removed ${name}\n`);
+    process.exit(0);
+  }
+  if (args.length >= 3) {
+    const repo = args[1];
+    const nameOrNumber = args[2];
+    const baseDir = resolve(DEFAULT_ROOT, repo);
+    const resolvedName = resolveName(baseDir, repo, nameOrNumber);
+    removeCheckpoint(baseDir, resolvedName);
+    process.stderr.write(`removed ${resolvedName}\n`);
+    process.exit(0);
+  }
+  die("usage: gc delete [<repo> <name-or-number>]");
 }
 
 const repo = args[1];
