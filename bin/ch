@@ -99,6 +99,25 @@ function run(cmd, cwd) {
   return res;
 }
 
+function runStreaming(cmd, cwd) {
+  const [bin, ...args] = cmd;
+  const res = spawnSync(bin, args, {
+    cwd,
+    stdio: "inherit",
+  });
+  if (res.error) {
+    if (res.error.code === "ENOENT") {
+      die(`command not found: ${bin}`);
+    }
+    die(res.error.message);
+  }
+  const exitCode = res.status ?? (res.signal ? 1 : 0);
+  if (exitCode !== 0) {
+    process.exit(exitCode);
+  }
+  return res;
+}
+
 function supportsRsyncInfoProgress(rsyncPath) {
   const res = spawnSync(rsyncPath, ["--info=progress2", "--version"], {
     stdio: ["ignore", "ignore", "ignore"],
@@ -514,7 +533,7 @@ if (cmd === "clone") {
     } else {
       rsyncArgs.push("--progress");
     }
-    run([rsyncPath, ...rsyncArgs, sourceWithSlash, targetWithSlash]);
+    runStreaming([rsyncPath, ...rsyncArgs, sourceWithSlash, targetWithSlash]);
   } else {
     run(["git", "clone", "--local", sourceRepo, target]);
   }
