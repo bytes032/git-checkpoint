@@ -54,19 +54,19 @@ gc switch
 gc delete
 gc clean fafo --days 90
 gc current fafo
-cd ~/checkpoints/fafo/current
+cd ~/projects/checkpoints/fafo/current
 ```
 
 By default, checkpoints go to:
 
 ```
-~/checkpoints/<repo>/<repo>-N
+~/projects/checkpoints/<repo>/<repo>-N
 ```
 
 Set `GC_ROOT` to change the base directory:
 
 ```
-export GC_ROOT=~/checkpoints
+export GC_ROOT=~/projects/checkpoints
 ```
 
 ## Commands
@@ -93,7 +93,7 @@ Examples:
 gc clone fafo
 gc clone --clone fafo
 gc clone --prefix work fafo
-gc clone --dest ~/checkpoints fafo
+gc clone --dest ~/projects/checkpoints fafo
 ```
 
 ### gc list
@@ -122,7 +122,7 @@ Example:
 
 ```
 gc switch fafo 2
-cd ~/checkpoints/fafo/current
+cd ~/projects/checkpoints/fafo/current
 ```
 
 ### gc clean
@@ -197,4 +197,4 @@ Prints the most recent checkpoint path.
 
 ## Config
 
-- `GC_ROOT`: override the default checkpoint root (defaults to `~/checkpoints`).
+- `GC_ROOT`: override the default checkpoint root (defaults to `~/projects/checkpoints`).

@@ -33,7 +33,7 @@ gc() {
       if [ -n "$repo" ]; then
         out="$(command gc current "$repo" 2>/dev/null)" || return 0
       else
-        local root="${GC_ROOT:-$HOME/checkpoints}"
+        local root="${GC_ROOT:-$HOME/projects/checkpoints}"
         if [ -f "$root/.gc-last-switch" ]; then
           out="$(cat "$root/.gc-last-switch")"
         fi

@@ -17,9 +17,9 @@ import {
 } from "fs";
 
 const HOME_DIR = process.env.HOME || homedir();
-const DEFAULT_ROOT = process.env.GC_ROOT || join(HOME_DIR, "checkpoints");
+const DEFAULT_ROOT = process.env.GC_ROOT || join(HOME_DIR, "projects", "checkpoints");
 const CHECKPOINTS_HELP = `Checkpoints live at ${DEFAULT_ROOT}/<repo> by default.
-Set GC_ROOT to change the base directory (e.g. "export GC_ROOT=~/checkpoints").`;
+Set GC_ROOT to change the base directory (e.g. "export GC_ROOT=~/projects/checkpoints").`;
 const INDEX_FILE = ".gc-index.json";
 
 function usage() {
