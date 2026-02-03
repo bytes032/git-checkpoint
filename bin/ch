@@ -530,7 +530,7 @@ if (cmd === "clone") {
     const rsyncArgs = ["-a"];
     if (supportsRsyncInfoProgress(rsyncPath)) {
       rsyncArgs.push("--info=progress2");
-    } else {
+    } else if (process.env.GC_RSYNC_PROGRESS === "1") {
       rsyncArgs.push("--progress");
     }
     runStreaming([rsyncPath, ...rsyncArgs, sourceWithSlash, targetWithSlash]);

@@ -192,7 +192,8 @@ Prints the most recent checkpoint path.
 
 - Default clone mode is a full copy (tracked + untracked + ignored).
 - Use `ch clone --clone` for a local git clone of tracked files only.
-- Copy mode uses `rsync` for speed and progress output.
+- Copy mode uses `rsync` for speed and progress output when available.
+- Set `GC_RSYNC_PROGRESS=1` to force `--progress` on older `rsync` versions.
 - If `rsync` isn’t available, use `ch clone --clone`.
 
 ## Config

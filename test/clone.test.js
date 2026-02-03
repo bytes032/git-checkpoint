@@ -45,7 +45,7 @@ process.exit(0);
   return rsyncPath;
 }
 
-function runClone({ supportsInfo }) {
+function runClone({ supportsInfo, forceProgress = false }) {
   const tmp = makeTempDir();
   const repo = join(tmp, "repo");
   initRepo(repo);
@@ -63,6 +63,7 @@ function runClone({ supportsInfo }) {
     GC_ROOT: gcRoot,
     RSYNC_LOG: logPath,
     RSYNC_SUPPORTS_INFO: supportsInfo ? "1" : "0",
+    GC_RSYNC_PROGRESS: forceProgress ? "1" : "0",
   };
 
   const res = spawnSync(process.execPath, [binPath, "clone", repo], {
@@ -87,8 +88,22 @@ test("ch clone uses --info=progress2 when supported", () => {
   assert.ok(!last.includes("--progress"));
 });
 
-test("ch clone falls back to --progress when --info is unsupported", () => {
+test("ch clone omits progress flags when --info is unsupported", () => {
   const { res, logPath, gcRoot, repo } = runClone({ supportsInfo: false });
+  assert.equal(res.status, 0, res.stderr || "");
+  const expected = realpathSync(join(gcRoot, basename(repo), `${basename(repo)}-1`));
+  const actual = realpathSync(res.stdout.trim());
+  assert.equal(actual, expected);
+
+  const lines = readFileSync(logPath, "utf8").trim().split("\n");
+  assert.ok(lines.some((line) => line.includes("--info=progress2 --version")));
+  const last = lines[lines.length - 1];
+  assert.ok(!last.includes("--progress"));
+  assert.ok(!last.includes("--info=progress2"));
+});
+
+test("ch clone uses --progress when forced on older rsync", () => {
+  const { res, logPath, gcRoot, repo } = runClone({ supportsInfo: false, forceProgress: true });
   assert.equal(res.status, 0, res.stderr || "");
   const expected = realpathSync(join(gcRoot, basename(repo), `${basename(repo)}-1`));
   const actual = realpathSync(res.stdout.trim());
