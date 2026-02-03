@@ -99,6 +99,13 @@ function run(cmd, cwd) {
   return res;
 }
 
+function supportsRsyncInfoProgress(rsyncPath) {
+  const res = spawnSync(rsyncPath, ["--info=progress2", "--version"], {
+    stdio: ["ignore", "ignore", "ignore"],
+  });
+  return res.status === 0;
+}
+
 function installEscapeHandler() {
   const onKey = (_value, key) => {
     if (key && key.name === "escape") {
@@ -501,7 +508,13 @@ if (cmd === "clone") {
     if (!rsyncPath) {
       die(`rsync not found. install rsync or use "${commandName()} clone --clone"`);
     }
-    run([rsyncPath, "-a", "--info=progress2", sourceWithSlash, targetWithSlash]);
+    const rsyncArgs = ["-a"];
+    if (supportsRsyncInfoProgress(rsyncPath)) {
+      rsyncArgs.push("--info=progress2");
+    } else {
+      rsyncArgs.push("--progress");
+    }
+    run([rsyncPath, ...rsyncArgs, sourceWithSlash, targetWithSlash]);
   } else {
     run(["git", "clone", "--local", sourceRepo, target]);
   }
