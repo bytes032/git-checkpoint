@@ -1,6 +1,7 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+import { spawnSync } from "child_process";
 import { homedir } from "os";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import readline from "readline";
 import {
   existsSync,
@@ -72,17 +73,23 @@ function isDir(p) {
 }
 
 function run(cmd, cwd) {
-  const res = Bun.spawnSync({
-    cmd,
+  const [bin, ...args] = cmd;
+  const res = spawnSync(bin, args, {
     cwd,
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: ["ignore", "pipe", "pipe"],
   });
-  if (res.exitCode !== 0) {
+  if (res.error) {
+    if (res.error.code === "ENOENT") {
+      die(`command not found: ${bin}`);
+    }
+    die(res.error.message);
+  }
+  const exitCode = res.status ?? (res.signal ? 1 : 0);
+  if (exitCode !== 0) {
     if (res.stderr?.length) {
       process.stderr.write(res.stderr);
     }
-    process.exit(res.exitCode || 1);
+    process.exit(exitCode);
   }
   return res;
 }
@@ -236,8 +243,30 @@ async function loadInquirer() {
     const mod = await import("inquirer");
     return mod.default || mod;
   } catch {
-    die('inquirer not installed. run "bun install" or "npm install" in ~/git-checkpoint');
+    die('inquirer not installed. run "npm install" in ~/git-checkpoint');
   }
+}
+
+function which(cmd) {
+  const hasPathSep = cmd.includes("/") || cmd.includes("\\");
+  if (hasPathSep) {
+    return existsSync(cmd) && statSync(cmd).isFile() ? cmd : "";
+  }
+
+  const exts =
+    process.platform === "win32"
+      ? (process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";")
+      : [""];
+  const paths = (process.env.PATH || "").split(delimiter).filter(Boolean);
+  for (const dir of paths) {
+    for (const ext of exts) {
+      const candidate = join(dir, `${cmd}${ext}`);
+      if (existsSync(candidate) && statSync(candidate).isFile()) {
+        return candidate;
+      }
+    }
+  }
+  return "";
 }
 
 async function promptList(message, choices) {
@@ -463,7 +492,7 @@ if (cmd === "clone") {
     process.stderr.write("copying (this may take a while for large repos)...\n");
     const sourceWithSlash = sourceRepo.endsWith("/") ? sourceRepo : `${sourceRepo}/`;
     const targetWithSlash = target.endsWith("/") ? target : `${target}/`;
-    const rsyncPath = Bun.which("rsync");
+    const rsyncPath = which("rsync");
     if (!rsyncPath) {
       die("rsync not found. install rsync or use \"gc clone --clone\"");
     }

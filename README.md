@@ -13,7 +13,7 @@ ln -s ~/git-checkpoint/bin/gc ~/bin/gc-clone
 Install dependencies:
 
 ```
-bun install
+npm install
 ```
 
 Or install via npm:
