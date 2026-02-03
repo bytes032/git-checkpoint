@@ -21,9 +21,14 @@ const DEFAULT_ROOT = process.env.GC_ROOT || join(HOME_DIR, "projects", "checkpoi
 const CHECKPOINTS_HELP = `Checkpoints live at ${DEFAULT_ROOT}/<repo> by default.
 Set GC_ROOT to change the base directory (e.g. "export GC_ROOT=~/projects/checkpoints").`;
 const INDEX_FILE = ".gc-index.json";
+const DEFAULT_COMMAND = "ch";
+
+function commandName() {
+  return basename(process.argv[1] || DEFAULT_COMMAND);
+}
 
 function usage() {
-  const self = basename(process.argv[1] || "gc");
+  const self = commandName();
   console.log(`Usage:
   ${self} clone <repo-path-or-name> [target-dir]
   ${self} clone --copy <repo-path-or-name> [target-dir]
@@ -338,7 +343,7 @@ function resolveName(baseDir, repo, nameOrNumber) {
     if (existsSync(join(baseDir, candidate))) return candidate;
   }
   if (existsSync(join(baseDir, nameOrNumber))) return nameOrNumber;
-  die(`checkpoint not found: ${nameOrNumber} (try "gc list ${repo}")`);
+  die(`checkpoint not found: ${nameOrNumber} (try "${commandName()} list ${repo}")`);
 }
 
 function resolveCheckpointFromCwd() {
@@ -387,10 +392,10 @@ function removeCheckpoint(baseDir, name) {
   }
 }
 
-const scriptName = basename(process.argv[1] || "gc");
+const scriptName = commandName();
 let args = process.argv.slice(2);
 
-if (scriptName === "gc-clone" && (args[0] !== "clone")) {
+if (scriptName === "ch-clone" && (args[0] !== "clone")) {
   args.unshift("clone");
 }
 
@@ -494,7 +499,7 @@ if (cmd === "clone") {
     const targetWithSlash = target.endsWith("/") ? target : `${target}/`;
     const rsyncPath = which("rsync");
     if (!rsyncPath) {
-      die("rsync not found. install rsync or use \"gc clone --clone\"");
+      die(`rsync not found. install rsync or use "${commandName()} clone --clone"`);
     }
     run([rsyncPath, "-a", "--info=progress2", sourceWithSlash, targetWithSlash]);
   } else {
@@ -564,7 +569,7 @@ if (cmd === "delete") {
     process.stderr.write(`removed ${resolvedName}\n`);
     process.exit(0);
   }
-  die("usage: gc delete [<repo> <name-or-number>]");
+  die(`usage: ${commandName()} delete [<repo> <name-or-number>]`);
 }
 
 const repo = args[1];

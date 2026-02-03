@@ -4,14 +4,14 @@
   "description": "Lightweight checkpointing for local git repos",
   "type": "module",
   "bin": {
-    "gc": "bin/gc"
+    "ch": "bin/ch"
   },
   "dependencies": {
     "inquirer": "^9.3.7"
   },
   "files": [
-    "bin/gc",
-    "shell/gc.sh",
+    "bin/ch",
+    "shell/ch.sh",
     "README.md"
   ],
   "repository": {

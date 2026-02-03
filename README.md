@@ -6,8 +6,8 @@ Lightweight checkpointing for local git repos. Create full copies or fast local 
 
 ```
 mkdir -p ~/bin
-ln -s ~/git-checkpoint/bin/gc ~/bin/gc
-ln -s ~/git-checkpoint/bin/gc ~/bin/gc-clone
+ln -s ~/git-checkpoint/bin/ch ~/bin/ch
+ln -s ~/git-checkpoint/bin/ch ~/bin/ch-clone
 ```
 
 Install dependencies:
@@ -30,30 +30,30 @@ npm install -g git+https://github.com/bytes032/git-checkpoint.git
 
 ## Shell Integration (auto-cd)
 
-To automatically `cd` into a checkpoint after `gc clone` or `gc switch`,
+To automatically `cd` into a checkpoint after `ch clone` or `ch switch`,
 source the shell helper:
 
 ```
-source ~/git-checkpoint/shell/gc.sh
+source ~/git-checkpoint/shell/ch.sh
 ```
 
 Add that line to `~/.zshrc` or `~/.bashrc` to make it permanent.
-If you use oh-my-zsh, it may define a `gc` git alias; the helper will
-`unalias gc` so the CLI can take over.
+If you use oh-my-zsh, it may define a `ch` git alias; the helper will
+`unalias ch` so the CLI can take over.
 The helper also runs `git pull --ff-only` after switching, when a remote
 named `origin` exists.
-When you run `gc delete`, the helper will `cd` you back to `~`.
+When you run `ch delete`, the helper will `cd` you back to `~`.
 
 ## Quickstart
 
 ```
-gc clone fafo
-gc list fafo
-gc switch fafo 2
-gc switch
-gc delete
-gc clean fafo --days 90
-gc current fafo
+ch clone fafo
+ch list fafo
+ch switch fafo 2
+ch switch
+ch delete
+ch clean fafo --days 90
+ch current fafo
 cd ~/projects/checkpoints/fafo/current
 ```
 
@@ -71,14 +71,14 @@ export GC_ROOT=~/projects/checkpoints
 
 ## Commands
 
-### gc clone
+### ch clone
 
 ```
-gc clone <repo-path-or-name> [target-dir]
-gc clone --copy <repo-path-or-name> [target-dir]
-gc clone --clone <repo-path-or-name> [target-dir]
-gc clone --dest <dir> <repo-path-or-name> [target-dir]
-gc clone --prefix <name> <repo-path-or-name>
+ch clone <repo-path-or-name> [target-dir]
+ch clone --copy <repo-path-or-name> [target-dir]
+ch clone --clone <repo-path-or-name> [target-dir]
+ch clone --dest <dir> <repo-path-or-name> [target-dir]
+ch clone --prefix <name> <repo-path-or-name>
 ```
 
 Creates a checkpoint of a local repo.
@@ -90,45 +90,45 @@ Creates a checkpoint of a local repo.
 Examples:
 
 ```
-gc clone fafo
-gc clone --clone fafo
-gc clone --prefix work fafo
-gc clone --dest ~/projects/checkpoints fafo
+ch clone fafo
+ch clone --clone fafo
+ch clone --prefix work fafo
+ch clone --dest ~/projects/checkpoints fafo
 ```
 
-### gc list
+### ch list
 
 ```
-gc list <repo>
+ch list <repo>
 ```
 
 Lists available checkpoints for a repo.
 
-### gc switch
+### ch switch
 
 ```
-gc switch <repo> <name-or-number>
-gc switch <repo>
-gc switch
+ch switch <repo> <name-or-number>
+ch switch <repo>
+ch switch
 ```
 
 Updates the `current` symlink to point at the selected checkpoint.
-If you run `gc switch <repo>` with no name, it opens an interactive
+If you run `ch switch <repo>` with no name, it opens an interactive
 picker (via `inquirer`) showing last activity.
-If you run `gc switch` with no repo, it first lets you pick a repo, then a checkpoint.
+If you run `ch switch` with no repo, it first lets you pick a repo, then a checkpoint.
 Press Esc to cancel the picker.
 
 Example:
 
 ```
-gc switch fafo 2
+ch switch fafo 2
 cd ~/projects/checkpoints/fafo/current
 ```
 
-### gc clean
+### ch clean
 
 ```
-gc clean <repo> [--days <n>] [--dry-run]
+ch clean <repo> [--days <n>] [--dry-run]
 ```
 
 Removes checkpoints that have **not** changed in the last `<n>` days (default 90).
@@ -138,23 +138,23 @@ mtime for change detection.
 Example:
 
 ```
-gc clean fafo --days 90
-gc clean fafo --days 90 --dry-run
+ch clean fafo --days 90
+ch clean fafo --days 90 --dry-run
 ```
 
-### gc current
+### ch current
 
 ```
-gc current <repo>
+ch current <repo>
 ```
 
 Prints the current checkpoint path (via the `current` symlink).
 
-### gc delete
+### ch delete
 
 ```
-gc delete
-gc delete <repo> <name-or-number>
+ch delete
+ch delete <repo> <name-or-number>
 ```
 
 Removes a checkpoint directory.
@@ -162,38 +162,38 @@ Removes a checkpoint directory.
 - With no arguments, it deletes the checkpoint that contains your current working directory.
 - With `<repo> <name-or-number>`, it deletes that checkpoint directly.
 
-### gc path
+### ch path
 
 ```
-gc path <repo> <name-or-number>
+ch path <repo> <name-or-number>
 ```
 
 Prints the full path to a checkpoint.
 
-### gc latest
+### ch latest
 
 ```
-gc latest <repo>
+ch latest <repo>
 ```
 
 Prints the most recent checkpoint path.
 
-- `gc clone <repo-path-or-name> [target-dir]`
-- `gc list <repo>`
-- `gc switch <repo> <name-or-number>`
-- `gc clean <repo> [--days <n>] [--dry-run]`
-- `gc current <repo>`
-- `gc delete`
-- `gc delete <repo> <name-or-number>`
-- `gc path <repo> <name-or-number>`
-- `gc latest <repo>`
+- `ch clone <repo-path-or-name> [target-dir]`
+- `ch list <repo>`
+- `ch switch <repo> <name-or-number>`
+- `ch clean <repo> [--days <n>] [--dry-run]`
+- `ch current <repo>`
+- `ch delete`
+- `ch delete <repo> <name-or-number>`
+- `ch path <repo> <name-or-number>`
+- `ch latest <repo>`
 
 ## Notes
 
 - Default clone mode is a full copy (tracked + untracked + ignored).
-- Use `gc clone --clone` for a local git clone of tracked files only.
+- Use `ch clone --clone` for a local git clone of tracked files only.
 - Copy mode uses `rsync` for speed and progress output.
-- If `rsync` isn’t available, use `gc clone --clone`.
+- If `rsync` isn’t available, use `ch clone --clone`.
 
 ## Config
 
