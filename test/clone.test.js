@@ -115,3 +115,45 @@ test("ch clone uses --progress when forced on older rsync", () => {
   assert.ok(last.includes("--progress"));
   assert.ok(!last.includes("--info=progress2"));
 });
+
+test("ch clone --clone pulls latest from source origin when behind", () => {
+  const tmp = makeTempDir();
+  const origin = join(tmp, "origin.git");
+  const seed = join(tmp, "seed");
+  const repo = join(tmp, "repo");
+  const pusher = join(tmp, "pusher");
+  const gcRoot = join(tmp, "checkpoints");
+
+  assert.equal(spawnSync("git", ["init", "--bare", origin], { stdio: "ignore" }).status, 0);
+  initRepo(seed);
+  assert.equal(spawnSync("git", ["-C", seed, "config", "user.email", "test@example.com"]).status, 0);
+  assert.equal(spawnSync("git", ["-C", seed, "config", "user.name", "Test"]).status, 0);
+  assert.equal(spawnSync("git", ["-C", seed, "add", "."], { stdio: "ignore" }).status, 0);
+  assert.equal(spawnSync("git", ["-C", seed, "commit", "-m", "init"], { stdio: "ignore" }).status, 0);
+  assert.equal(spawnSync("git", ["-C", seed, "branch", "-M", "main"], { stdio: "ignore" }).status, 0);
+  assert.equal(spawnSync("git", ["-C", seed, "remote", "add", "origin", origin], { stdio: "ignore" }).status, 0);
+  assert.equal(spawnSync("git", ["-C", seed, "push", "-u", "origin", "main"], { stdio: "ignore" }).status, 0);
+
+  assert.equal(spawnSync("git", ["clone", origin, repo], { stdio: "ignore" }).status, 0);
+  assert.equal(spawnSync("git", ["clone", origin, pusher], { stdio: "ignore" }).status, 0);
+  assert.equal(spawnSync("git", ["-C", pusher, "config", "user.email", "test@example.com"]).status, 0);
+  assert.equal(spawnSync("git", ["-C", pusher, "config", "user.name", "Test"]).status, 0);
+
+  writeFileSync(join(pusher, "new.txt"), "new\n");
+  assert.equal(spawnSync("git", ["-C", pusher, "add", "."], { stdio: "ignore" }).status, 0);
+  assert.equal(spawnSync("git", ["-C", pusher, "commit", "-m", "new"], { stdio: "ignore" }).status, 0);
+  assert.equal(spawnSync("git", ["-C", pusher, "push"], { stdio: "ignore" }).status, 0);
+
+  const originHead = spawnSync("git", ["-C", pusher, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+  const repoHead = spawnSync("git", ["-C", repo, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+  assert.notEqual(repoHead, originHead);
+
+  const res = spawnSync(process.execPath, [binPath, "clone", "--clone", repo], {
+    env: { ...process.env, GC_ROOT: gcRoot },
+    encoding: "utf8",
+  });
+  assert.equal(res.status, 0, res.stderr || "");
+  const checkpoint = res.stdout.trim();
+  const ckHead = spawnSync("git", ["-C", checkpoint, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+  assert.equal(ckHead, originHead);
+});

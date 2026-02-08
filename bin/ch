@@ -118,6 +118,48 @@ function runStreaming(cmd, cwd) {
   return res;
 }
 
+function tryRunQuiet(cmd, cwd) {
+  const [bin, ...args] = cmd;
+  const res = spawnSync(bin, args, {
+    cwd,
+    stdio: ["ignore", "ignore", "ignore"],
+  });
+  if (res.error) {
+    if (res.error.code === "ENOENT") {
+      die(`command not found: ${bin}`);
+    }
+    die(res.error.message);
+  }
+  return res.status ?? (res.signal ? 1 : 0);
+}
+
+function tryReadStdout(cmd, cwd) {
+  const [bin, ...args] = cmd;
+  const res = spawnSync(bin, args, {
+    cwd,
+    stdio: ["ignore", "pipe", "ignore"],
+    encoding: "utf8",
+  });
+  if (res.error) {
+    if (res.error.code === "ENOENT") {
+      die(`command not found: ${bin}`);
+    }
+    die(res.error.message);
+  }
+  if ((res.status ?? 1) !== 0) return "";
+  return (res.stdout || "").trim();
+}
+
+function pullLatestFromOriginIfPossible(repoDir) {
+  // Best-effort. This is intentionally non-fatal (offline, auth, dirty tree, etc).
+  const hasOrigin = tryRunQuiet(["git", "-C", repoDir, "remote", "get-url", "origin"]) === 0;
+  if (!hasOrigin) return;
+  const ok = tryRunQuiet(["git", "-C", repoDir, "pull", "--ff-only"]) === 0;
+  if (!ok) {
+    process.stderr.write("warning: git pull failed (non-fast-forward, dirty tree, or offline)\n");
+  }
+}
+
 function supportsRsyncInfoProgress(rsyncPath) {
   const res = spawnSync(rsyncPath, ["--info=progress2", "--version"], {
     stdio: ["ignore", "ignore", "ignore"],
@@ -489,6 +531,7 @@ if (cmd === "clone") {
   }
 
   run(["git", "-C", sourceRepo, "rev-parse", "--is-inside-work-tree"]);
+  const sourceOriginUrl = tryReadStdout(["git", "-C", sourceRepo, "remote", "get-url", "origin"]);
 
   sourceRepo = realpathSync(sourceRepo);
   const baseName = basename(sourceRepo);
@@ -536,7 +579,14 @@ if (cmd === "clone") {
     runStreaming([rsyncPath, ...rsyncArgs, sourceWithSlash, targetWithSlash]);
   } else {
     run(["git", "clone", "--local", sourceRepo, target]);
+    // Preserve the source's origin (if any). `git clone --local` sets origin to the local path,
+    // which makes subsequent pulls pull from the local repo instead of the real remote.
+    if (sourceOriginUrl) {
+      tryRunQuiet(["git", "-C", target, "remote", "set-url", "origin", sourceOriginUrl]);
+    }
   }
+
+  pullLatestFromOriginIfPossible(target);
 
   if (target.startsWith(destRoot + "/") || target === destRoot) {
     recordCheckpoint(destRoot, basename(target));
