@@ -32,6 +32,7 @@ function usage() {
   console.log(`Usage:
   ${self} clone <repo-path-or-name> [target-dir]
   ${self} clone --copy <repo-path-or-name> [target-dir]
+  ${self} clone --no-pull-source <repo-path-or-name> [target-dir]
   ${self} clone --dest <dir> <repo-path-or-name> [target-dir]
   ${self} clone --prefix <name> <repo-path-or-name>
   ${self} list <repo>
@@ -478,6 +479,7 @@ if (cmd === "clone") {
   let mode = "copy";
   let destRoot = "";
   let prefix = "";
+  let pullSource = true;
 
   while (args.length > 0) {
     const arg = args[0];
@@ -492,6 +494,11 @@ if (cmd === "clone") {
     }
     if (arg === "--clone") {
       mode = "clone";
+      args.shift();
+      continue;
+    }
+    if (arg === "--no-pull-source") {
+      pullSource = false;
       args.shift();
       continue;
     }
@@ -532,6 +539,9 @@ if (cmd === "clone") {
 
   run(["git", "-C", sourceRepo, "rev-parse", "--is-inside-work-tree"]);
   const sourceOriginUrl = tryReadStdout(["git", "-C", sourceRepo, "remote", "get-url", "origin"]);
+  if (pullSource) {
+    pullLatestFromOriginIfPossible(sourceRepo);
+  }
 
   sourceRepo = realpathSync(sourceRepo);
   const baseName = basename(sourceRepo);

@@ -77,6 +77,7 @@ export GC_ROOT=~/projects/checkpoints
 ch clone <repo-path-or-name> [target-dir]
 ch clone --copy <repo-path-or-name> [target-dir]
 ch clone --clone <repo-path-or-name> [target-dir]
+ch clone --no-pull-source <repo-path-or-name> [target-dir]
 ch clone --dest <dir> <repo-path-or-name> [target-dir]
 ch clone --prefix <name> <repo-path-or-name>
 ```
@@ -85,6 +86,7 @@ Creates a checkpoint of a local repo.
 
 - Default mode is `--copy`, which copies everything (tracked + untracked + ignored).
 - Use `--clone` for a fast local `git clone` (tracked files only).
+- By default, `ch clone` runs `git pull --ff-only` in the source repo before creating the checkpoint (best-effort). Use `--no-pull-source` to disable.
 - If `target-dir` is omitted, a numbered folder is created under the repo’s checkpoint directory.
 
 Examples:
