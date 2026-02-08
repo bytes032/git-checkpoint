@@ -596,8 +596,6 @@ if (cmd === "clone") {
     }
   }
 
-  pullLatestFromOriginIfPossible(target);
-
   if (target.startsWith(destRoot + "/") || target === destRoot) {
     recordCheckpoint(destRoot, basename(target));
   }

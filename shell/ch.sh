@@ -12,13 +12,6 @@ ch() {
       out="$(command ch "$@")" || return $?
       if [ -n "$out" ]; then
         cd "$out" || return $?
-        if command git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-          if command git remote get-url origin >/dev/null 2>&1; then
-            command git pull --ff-only >/dev/null 2>&1 || {
-              echo "ch: git pull failed (non-fast-forward or offline)" >&2
-            }
-          fi
-        fi
         printf '%s\n' "$out"
       fi
       ;;
